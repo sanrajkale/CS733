@@ -42,13 +42,13 @@ Following is the description of implemented functions in program
  - `func sendAppendRpc` : Sends the log entry/heart beat to single Follower 
  - `func AppendRPC` : This function updates followers log. If Received Log entry is empty, it is treated as heart Beat
  - `func VoteForLeader` accept the vote request from candiate and replies whether voted or not.Its this server is already a leader or candiate , it rejects the vote straight way else it compares its log with received parameters to decide 
-- `func SyncAllLog`:  This Function Syncs log till log index of given in argument.This function sends log entries to follower pointed by NextIndex for that server. If Particular servers log is updated one, it just sends heartbeat to that follower, If log entry gets the majority, it is applied by sending it to Input_ch channel same as AppencCaller Mathod.
-- `func prepareHeartBeat`: This function prepare Heart Beat agruments. If log is having more than two entries , is sends the prevLogIndex and PrevLogTerm of heighest log entry If log has no entry, it sends current term as prevLogTerm
-- `func SendBeat`: This Function sends Regular heart beat to all follower if followers log is in sync with Leaders log. Else this function call SychAllLog function, which in turn sends heart beat or Log Entry as required depending on NextIndex
-- `func SendHeartbeat` : This function invokes SendBeat method. Immediate Heart beats are send after new leader is elected. HeartBeatTimer is reset every time HeartBeat is sent. If Append Log request(AppendCaller() is invoked) is send, Heart Beat timer is reset 
-- `func CallElection` : is responsible for leader election. It send vote request to all the servers and if vote request is positive and in majority , it sets candidate as leader	
-- `func sendVoteRequestRpc` : send the vote request from Candiate to other server
-- `func VoteForLeader` : accept the vote request from candiate and replies whether voted or not. Its this server is already a leader or candiate , it rejects the vote straight way else it compares its log with received parameters to decide 
+ - `func SyncAllLog`:  This Function Syncs log till log index of given in argument.This function sends log entries to follower pointed by NextIndex for that server. If Particular servers log is updated one, it just sends heartbeat to that follower, If log entry gets the majority, it is applied by sending it to Input_ch channel same as AppencCaller Mathod.
+ - `func prepareHeartBeat`: This function prepare Heart Beat agruments. If log is having more than two entries , is sends the prevLogIndex and PrevLogTerm of heighest log entry If log has no entry, it sends current term as prevLogTerm
+ - `func SendBeat`: This Function sends Regular heart beat to all follower if followers log is in sync with Leaders log. Else this function call SychAllLog function, which in turn sends heart beat or Log Entry as required depending on NextIndex
+ - `func SendHeartbeat` : This function invokes SendBeat method. Immediate Heart beats are send after new leader is elected. HeartBeatTimer is reset every time HeartBeat is sent. If Append Log request(AppendCaller() is invoked) is send, Heart Beat timer is reset 
+ - `func CallElection` : is responsible for leader election. It send vote request to all the servers and if vote request is positive and in majority , it sets candidate as leader	
+ - `func sendVoteRequestRpc` : send the vote request from Candiate to other server
+ - `func VoteForLeader` : accept the vote request from candiate and replies whether voted or not. Its this server is already a leader or candiate , it rejects the vote straight way else it compares its log with received parameters to decide 
 
 
 
