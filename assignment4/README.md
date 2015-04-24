@@ -1,6 +1,6 @@
 # RAFT
 
-This is the Third assignment of course CS733: Advanced Distributed Computing - Engineering a Cloud. 
+This is the Fourth assignment of course CS733: Advanced Distributed Computing - Engineering a Cloud. 
 The purpose of this assignment is to understand and implement the RAFT protocol.
 We have a set of servers. One of them is made the leader, which communicates with the clients over TCP. 
 Leader communicates with the followers through RPC.
