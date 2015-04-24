@@ -195,7 +195,7 @@ func (r *Raft) CallElection(){
 					// if Candiate gets majoirty, declare candiate as Leader and send immediae heartbeat to followers declaring
 					// election of new leader
 				if VoteAckcount > (len(r.ClusterConfigV.Servers)/2) && r.IsLeader == 0  { 
-					fmt.Println("New leader is:",r.Id)
+					log.Println("New leader is:",r.Id)
 					r.IsLeader=1
 					r.LeaderId=r.Id
 					raft.SendImmediateHeartBit <- 1
@@ -322,20 +322,19 @@ func (a *RPC) VoteForLeader(args *RequestVoteRPCArgs,reply *bool) error{
 AppendRPC : 
 This function updates followers log.
 If Received Log entry is empty, it is treated as heart Beat
- 
 */
 func (a *RPC) AppendRPC(args *AppendRPCArgs, reply *AppendRPCReply) error {
 	//raft.ElectionTimer_ch <- args.LeaderId   //TODO
 	r.ResetTimer()   // Reset timer for election 
 	mutex.Lock()  	 
-	
+	r.ResetTimer()
     var logIndex int  
     if len(r.Log) > 0 {  // If Log is not emtpy.. Initialised Log intex to last heighest log index
     	logIndex =len(r.Log)-1
     }else{ 
     	logIndex =0  // Else Log index is 0
     }
-   // fmt.Println("LogInedx ",logIndex," PrevLogIndex ",args.PrevLogIndex)
+   //fmt.Println("LogInedx ",logIndex," PrevLogIndex ",args.PrevLogIndex)
 	if len(args.Entry.Command)!=0{   // If This request has actual logentry to append, else it is heartbeat. 
 		
 		r.IsLeader=2  				 // Fall back to Follower state 
@@ -379,15 +378,15 @@ func (a *RPC) AppendRPC(args *AppendRPCArgs, reply *AppendRPCReply) error {
 		                      		r.CurrentTerm=args.Term	
 		                      		//fmt.Println("Calling commit in logIndex=PrevLogIndex")
 		                      		CommitCh <- CommitI_LogI{args.LeaderCommit,len(r.Log)-1}
-		                }else if len(r.Log)==0 && args.Entry.SequenceNumber!=0{   // If log is empty and Recieved log entry index is not 0, Missmatch, Reject
+		                }else if len(r.Log)!=args.Entry.SequenceNumber{   // If log is empty and Recieved log entry index is not 0, Missmatch, Reject
 		                   		   	//r.Log=append(r.Log,args.Entry)
 		                      		reply.Reply=false
-		                      		reply.NextIndex=0
-		                      		reply.MatchIndex=0
+		                      		reply.NextIndex=len(r.Log)
+		                      		reply.MatchIndex=-1
 		                      		r.CurrentTerm=args.Term	
 		                      		//fmt.Println("Calling commit in logIndex=PrevLogIndex")
 		                      		//CommitCh <- CommitI_LogI{args.LeaderCommit,len(r.Log)-1}
-		                }else{											// Previous log is matched , and this is new entry, add it to last of log
+		                }else {											// Previous log is matched , and this is new entry, add it to last of log
 		                			r.Log=append(r.Log,args.Entry)
 		                      		reply.Reply=true
 		                      		reply.NextIndex=len(r.Log)
@@ -397,9 +396,9 @@ func (a *RPC) AppendRPC(args *AppendRPCArgs, reply *AppendRPCReply) error {
 		                      		CommitCh <- CommitI_LogI{args.LeaderCommit,len(r.Log)-1}
 		                }
 		    }
-		    if len (args.Entry.Command)!=0{
-				//fmt.Println("Received append rpc for",r.Id ," From ",args.LeaderId, " Log size is ",logIndex, " == ",args.PrevLogIndex," < ", args.Entry.SequenceNumber ," Commitindex ",r.CommitIndex," < ",args.LeaderCommit, "added ",reply.Reply)
-			}
+		   /* if len (args.Entry.Command)!=0{
+				fmt.Println("Received append rpc for",r.Id ," From ",args.LeaderId, " Log size is ",logIndex, " == ",args.PrevLogIndex," < ", args.Entry.SequenceNumber ," Commitindex ",r.CommitIndex," < ",args.LeaderCommit, "added ",reply.Reply)
+			}*/
 	r.ResetTimer()   // This is For precautionaru measure, as system was slow and it was taking more time, leading to expiry of timer
 					// Before replying 	
 	}else
@@ -408,6 +407,8 @@ func (a *RPC) AppendRPC(args *AppendRPCArgs, reply *AppendRPCReply) error {
 		This part is same as above but only without actually aadding entries to log. Next index and match index is updated.
 		and CommitCh is feed with commit Index entries
 		*/
+		//fmt.Println("Heart Beat recieved ",r.Id," ","LogInedx " , len(r.Log)-1," PrevLogIndex ",args.PrevLogIndex)
+		//fmt.Println("LogInedx ",logIndex," PrevLogIndex ",args.PrevLogIndex)
 		 if(r.CurrentTerm <= args.Term) {  
 				r.IsLeader=2
 				r.LeaderId=args.LeaderId	
@@ -483,19 +484,18 @@ func (r *Raft) sendAppendRpc(value ServerConfig,appendEntry *AppendRPCArgs, Appe
 	}
 	
 	//fmt.Println("RPC reply from:",value.Hostname+":"+strconv.Itoa(value.LogPort)+" is ",reply.Reply)
-
-	if reply.Reply {
-		 AppendAck_ch <- 1
-	}else {
-		AppendAck_ch <-	0
-	}
-
 	if reply.NextIndex!=-1 {
+		
 		r.NextIndex[value.Id]=reply.NextIndex	
 	}	
 	if reply.MatchIndex!=-1 {
 		r.MatchIndex[value.Id]=reply.MatchIndex
 	}	
+	if reply.Reply {
+		 AppendAck_ch <- value.Id
+	}else {
+		AppendAck_ch <-	-1
+	}
 }
 
 /*
@@ -516,9 +516,10 @@ func  AppendCaller() {
 			conn:=log_conn.Conn
 			raft.AppendHeartbeat <- 1    // No need to send heartbeat in this cycle, as sending log entires is also treated as heartbeat
 			appendAckcount:=1
-			
+			syncNeeded := false
+			var logentry1 LogEntry
 			var args *AppendRPCArgs   // Prepare Arguments, 
-			if logentry.SequenceNumber >= 1 {	  // if Log has more than 2 entries
+			/*if logentry.SequenceNumber >= 1 {	  // if Log has more than 2 entries
 				args = &AppendRPCArgs {
 					r.CurrentTerm,
 					r.LeaderId,
@@ -536,24 +537,58 @@ func  AppendCaller() {
 					logentry,
 					r.CommitIndex,
 				}
-			}
+			}*/
 
 			fmt.Println("Append Recieved ",logentry.SequenceNumber)
 				var AppendAck_ch = make (chan int,len(r.ClusterConfigV.Servers)-1)
 				for _,server := range r.ClusterConfigV.Servers {			
 						if server.Id != r.Id {
+							if(logentry.SequenceNumber>r.NextIndex[server.Id]){
+									logentry1 = r.Log[r.NextIndex[server.Id]]
+									syncNeeded=true
+								}else{
+									logentry1 = logentry	
+								}
+								if logentry1.SequenceNumber >= 1 {	
+										args = &AppendRPCArgs {
+										r.CurrentTerm,
+										r.LeaderId,
+										logentry1.SequenceNumber-1,
+										r.Log[logentry1.SequenceNumber-1].Term,
+										logentry1,
+										r.CommitIndex,
+									}
+								} else {
+									args = &AppendRPCArgs {
+									r.CurrentTerm,
+									r.LeaderId,
+									0,
+									r.CurrentTerm,
+									logentry1,
+									r.CommitIndex,
+								}
+							}			
 							go r.sendAppendRpc(server,args,AppendAck_ch,false)  // to send Log entry to follower 
 						}
 					}
 					for j:=0;j<len(r.ClusterConfigV.Servers)-1;j++{
-							appendAckcount = appendAckcount + <- AppendAck_ch 
-						if appendAckcount > len(r.ClusterConfigV.Servers)/2 {   // If we have majority in log , update commit index
-							r.CommitIndex=logentry.SequenceNumber
-							logentry.IsCommitted=true
+							id:=<- AppendAck_ch 
+							if(id!=-1 && r.MatchIndex[id]==logentry.SequenceNumber){
+								appendAckcount++
+							}
+							if appendAckcount > len(r.ClusterConfigV.Servers)/2 {   // If we have majority in log , update commit index
+								r.CommitIndex=logentry.SequenceNumber
+								logentry.IsCommitted=true
 							break			
-						}
+							}
 					}
-
+					/*	majorCount:=0
+						for _,serverC:= range r.ClusterConfigV.Servers { // Check if log entry is in majority 
+							if serverC.Id !=r.Id && r.MatchIndex[serverC.Id] == logentry.SequenceNumber {
+								majorityCount++
+							}
+						}
+					*/
 					if(logentry.IsCommitted==true){  // If log is committed, write it to log, and send log entry for evaluation on input_ch
 						//fmt.Println("Commited ",logentry.SequenceNumber)
 						r.Log[logentry.SequenceNumber].IsCommitted=true
@@ -563,12 +598,21 @@ func  AppendCaller() {
 						r.File.WriteString(strconv.Itoa(logentry.Term)+" "+strconv.Itoa(logentry.SequenceNumber)+" "+strings.TrimSpace(strings.Replace(string(logentry.Command),"\n"," ",-1))+" "+
 		" "+strconv.FormatBool(logentry.IsCommitted))
 						r.File.WriteString("\t\r\n");
-					}else {  // If Log is not commited, call thsi function to Sync all logs, Logs are sync only till current Logentry, not beyong this even if 
-								// Leader log has go more entries added while executing this
-								//fmt.Println("Sync call from append")
+					} else { 
+					 			//if syncNeeded==true{  // If Log is not commited, call thsi function to Sync all logs, Logs are sync only till current Logentry, not beyong this even if 
+									// Leader log has go more entries added while executing this
+									//fmt.Println("Sync call from append")
+								syncNeeded=false
+								//fmt.Println("Sync Called from Else")
 								SyncAllLog(Log_Conn{logentry,conn})		
 
 						}
+					if syncNeeded==true{  // If Log is not commited, call thsi function to Sync all logs, Logs are sync only till current Logentry, not beyong this even if 
+									// Leader log has go more entries added while executing this
+									//fmt.Println("Sync call from append")
+						//	fmt.Println("Sync Called from syncNeeded == True")
+							SyncAllLog(Log_Conn{logentry,conn})
+						}								
 				}
 }
 
@@ -663,7 +707,7 @@ func CommitCaller(){
 */
 
 func SyncAllLog(log_conn Log_Conn ){
-	//fmt.Println("Sync Called")
+	fmt.Println("Sync Called")
 	for r.IsLeader==1{
 		logentry:=log_conn.Logentry
 		conn:=log_conn.Conn
@@ -671,14 +715,14 @@ func SyncAllLog(log_conn Log_Conn ){
 		var args *AppendRPCArgs
 		var heartBeat bool
 		var logentry1 LogEntry
-		var majority int
+		//var majority int
 		raft.AppendHeartbeat <- 1
 		for _,server := range r.ClusterConfigV.Servers {
 			if server.Id != r.Id {
 				// if Follower not having latast entry and Expected entry index is less or equal to current Log index 
 				if r.MatchIndex[server.Id] < (logentry.SequenceNumber) && r.NextIndex[server.Id] <= (logentry.SequenceNumber) { //&& r.MatchIndex[server.Id]!=0 && r.NextIndex[server.Id]!=0
 					logentry1=r.Log[r.NextIndex[server.Id]]  // Next to send is entry at Next Index 
-					majority = r.MatchIndex[server.Id]   
+					//majority = r.MatchIndex[server.Id]   
 					if logentry1.SequenceNumber >= 1 {	
 							args = &AppendRPCArgs {
 							logentry1.Term,
@@ -711,10 +755,10 @@ func SyncAllLog(log_conn Log_Conn ){
 						//fmt.Println("Sending SYnc for server ",server.Id," log  ",logentry1.SequenceNumber)
 						go r.sendAppendRpc(server,args,AppendAck_ch,false)  
 					}
-					if !heartBeat && 1==<-AppendAck_ch {  // If Log Entry is send, wait for reply, If log entry is appended to follower
+					if !heartBeat && -1 !=<-AppendAck_ch {  // If Log Entry is send, wait for reply, If log entry is appended to follower
 						majorityCount:=0
 						for _,serverC:= range r.ClusterConfigV.Servers { // Check if log entry is in majority 
-							if serverC.Id !=r.Id && serverC.Id != server.Id && r.MatchIndex[serverC.Id] > majority && r.MatchIndex[serverC.Id] != 0 {
+							if serverC.Id !=r.Id && serverC.Id != server.Id && r.MatchIndex[serverC.Id] >= logentry1.SequenceNumber {//&& r.MatchIndex[serverC.Id] != 0 {
 								majorityCount++
 							}
 						}
@@ -747,12 +791,12 @@ func SyncAllLog(log_conn Log_Conn ){
 					break
 				}		
 	}//outer for loop
-	//fmt.Println("Sync Exited")
+	fmt.Println("Sync Exited")
 }
 
 
 /*
-This function prepare Heart Beat agruments. 
+func prepareHeartBeat This function prepare Heart Beat agruments. 
 If log is having more than two entries , is sends the prevLogIndex and PrevLogTerm of heighest log entry 
 If log has no entry, it sends current term as prevLogTerm
 */
@@ -798,15 +842,15 @@ func prepareHeartBeat() *AppendRPCArgs{
 
 /*
 
-	This Function sends Regular heart beat to all follower if followers log is in sync with Leaders log.
+	func SendBeat This Function sends Regular heart beat to all follower if followers log is in sync with Leaders log.
 	Else this function call SychAllLog function, which in turn sends heart beat or Log ENtry as required depending on NextIndex
 */
 
 func SendBeat(){
 	if r.IsLeader==1{
-					logMutex.Lock()
-					log_len := len(r.Log)-1
-					logMutex.Unlock()
+				//	logMutex.Lock()
+				//	log_len := len(r.Log)-1
+				//	logMutex.Unlock()
 					majorityCount:=1
 					for _,server:= range r.ClusterConfigV.Servers {
 						//if i.Id !=raft.ServerId && i!=value && raft.matchIndex[i.Id] >majorityCheck {
@@ -816,7 +860,7 @@ func SendBeat(){
 					}
 					if majorityCount>len(r.ClusterConfigV.Servers)/2 && majorityCount!=len(r.ClusterConfigV.Servers) && r.CommitIndex != -1 {
 						//fmt.Println("Sync will be called ",r.CommitIndex)
-						SyncAllLog(Log_Conn{r.Log[log_len],nil})
+						SyncAllLog(Log_Conn{r.Log[r.CommitIndex],nil})
 					}else{
 						args:=prepareHeartBeat()
 						var AppendAck_ch = make(chan int,len(r.ClusterConfigV.Servers)-1)
@@ -826,7 +870,8 @@ func SendBeat(){
 						} 
 						heartBeatAck:=0
 						for j:=0;j<len(r.ClusterConfigV.Servers)-1;j++{
-							heartBeatAck  = heartBeatAck+ <- AppendAck_ch 
+							<- AppendAck_ch 
+							heartBeatAck  = heartBeatAck+ 1
 							if heartBeatAck > len(r.ClusterConfigV.Servers)/2 { 
 								break			
 							}
@@ -842,6 +887,7 @@ var StopTimer bool
 
 
 /*
+SendHeartbeat
 	This function invokes SendBeat method.
 	Immediate Heart beats are send after new leader is elected.
 	HeartBeatTimer is reset every time HeartBeat is sent. 
@@ -857,6 +903,7 @@ func SendHeartbeat(){
 			case <-raft.SendImmediateHeartBit:
 						HeartBeatTimer = time.NewTimer(time.Millisecond*1000)
 						SendBeat()
+
 			case <-HeartBeatTimer.C:
 						HeartBeatTimer = time.NewTimer(time.Millisecond*1000)
 						SendBeat()
@@ -899,17 +946,20 @@ func (r *Raft) ClientListener(listener net.Conn) {
 	command, rem = GetCommand(rem + input_)
 	for {
 			if command != "" {
-				if command[0:3] == "get" {					
-					Input_ch <- Log_Conn{LogEntry{0,0,[]byte(command),true}, listener}
-				} else {
+			//	if command[0:3] == "get" {					
+			//		Input_ch <- Log_Conn{LogEntry{0,0,[]byte(command),true}, listener}
+			//	} else {
 					commandbytes := []byte(command)		
 					logMutex.Lock()			
 						var logentry=LogEntry{r.CurrentTerm,len(r.Log),commandbytes,false}
 						r.Log=append(r.Log,logentry)
+						fmt.Println("Sendeing log ",logentry.SequenceNumber)
 						Append_ch <- Log_Conn{logentry, listener}
 					logMutex.Unlock()
-				}//ends inner if
-			} else { break 	} //end of outer if
+				//}
+			} else { 
+				//fmt.Println("I m breaking yaaar. Sorry")
+				 break 	} //end of outer if
 			command, rem = GetCommand(rem)
 		}//end of for
 	}//end of outer for

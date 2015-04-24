@@ -43,9 +43,6 @@ func SpawnClient(t *testing.T, id int, testCases []TestCase) {
 		return
 	}
 	defer conn.Close()
-	
-
-	
 	// Execute the testcases
 	for i:=0; i<len(testCases); i++ {
 		// Now send data
@@ -88,10 +85,9 @@ func ClientSpawner(t *testing.T, testCases []TestCase, n int) {
 		ended++
 	}
 }
-
 func TestCase1(t *testing.T) {
 	// Number of concurrent clients
-	var n = 2
+	var n = 5
 	// ---------- set the values of different keys -----------
 	var testCases = []TestCase {
 		{"set alpha 0 10\r\nI am ALPHA\r\n", "", true},
@@ -99,15 +95,17 @@ func TestCase1(t *testing.T) {
 		{"set gamma 0 10 noreply\r\nI am GAMMA\r\n", "", false},
 		{"set theta 0 10\r\nI am THETA\r\n", "", true},
 	}
+	fmt.Println("Number of logs ",n*4)
 	ClientSpawner(t, testCases, n)
+
 
 	// ---------- get theta ----------------------------------
 	testCases = []TestCase {
 		{"get theta\r\n", "VALUE 10\r\nI am THETA\r\n", true},
 	}
-	ClientSpawner(t, testCases, n)
+	//ClientSpawner(t, testCases, n)
 	
-	ClientSpawner(t, testCases, 10)
+	//ClientSpawner(t, testCases, 10)
 
 	// ---------- get the changed value -----------------------
 	testCases = []TestCase {
@@ -116,5 +114,50 @@ func TestCase1(t *testing.T) {
 	}
 	//ClientSpawner(t, testCases, n)
 }
+func TestCase2(t *testing.T) {
+		var testCases = []TestCase {
+			{"set alpha 0 10\r\nI am ALPHA\r\n", "", true},
+			{"set beta 0 9 noreply\r\nI am BETA\r\n", "", false},
+			{"set gamma 0 10 noreply\r\nI am GAMMA\r\n", "", false},
+			{"set theta 0 10\r\nI am THETA\r\n", "", true},
+		}
+		tcpAddr, err := net.ResolveTCPAddr("tcp", "localhost:9002")
+		conn, err := net.DialTCP("tcp", nil, tcpAddr)
+		if err != nil {
+			log.Print("Error in dialing: ", err)
+			return
+		}
+		
+		var n =5
+		fmt.Println("Number of logs ",40)
+		defer conn.Close()
+		// Execute the testcases
+		for j:=0;j<n;j++{
+		for i:=0; i<len(testCases); i++ {
+		// Now send data
+		input := testCases[i].input
+		exp_output := testCases[i].output
+		expectReply := testCases[i].expectReply
+
+		conn.Write([]byte(input))
+//		time.Sleep(750 * time.Millisecond)
+		if !expectReply {
+			continue
+		}
+		reply := make([]byte, 1000)
+		conn.Read(reply) 
+		//fmt.Println("Got reply ", string(reply))	
+//		log.Print("[Client]:",string(reply))
+			if exp_output != "" { reply = reply[0:len(exp_output)] }
+			// if expected output is "", then don't check
+			if exp_output!="" && string(reply) != exp_output {
+				t.Error(fmt.Sprintf("Input: %q, Expected Output: %q, Actual Output: %q", input, exp_output, string(reply)))
+			}
+		}}
+	}
+
+
+
+
 
 
