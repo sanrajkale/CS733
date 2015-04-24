@@ -1,7 +1,7 @@
 package main 
 
 import (
-	"raft"
+	"github.com/sanrajkale/CS733/assignment4/src/raft"
 	//"fmt"
 	"log"
 	"time"
