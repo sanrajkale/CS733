@@ -9,7 +9,7 @@ import (
 		"log"
 		"net"
 		"testing"
-		"strconv"
+	//	"strconv"
 )
 
 func TestMain(t *testing.T) {
@@ -87,7 +87,7 @@ func ClientSpawner(t *testing.T, testCases []TestCase, n int) {
 }
 func TestCase1(t *testing.T) {
 	// Number of concurrent clients
-	var n = 5
+	var n = 2
 	// ---------- set the values of different keys -----------
 	var testCases = []TestCase {
 		{"set alpha 0 10\r\nI am ALPHA\r\n", "", true},
@@ -95,7 +95,7 @@ func TestCase1(t *testing.T) {
 		{"set gamma 0 10 noreply\r\nI am GAMMA\r\n", "", false},
 		{"set theta 0 10\r\nI am THETA\r\n", "", true},
 	}
-	fmt.Println("Number of logs ",n*4)
+	//fmt.Println("Number of logs ",n*4)
 	ClientSpawner(t, testCases, n)
 
 
@@ -103,16 +103,9 @@ func TestCase1(t *testing.T) {
 	testCases = []TestCase {
 		{"get theta\r\n", "VALUE 10\r\nI am THETA\r\n", true},
 	}
-	//ClientSpawner(t, testCases, n)
+	//ClientSpawner(t, testCases, 4)
 	
 	//ClientSpawner(t, testCases, 10)
-
-	// ---------- get the changed value -----------------------
-	testCases = []TestCase {
-		{"get gamma\r\n", "VALUE 13\r\nI am BETA now\r\n", true},
-		{"getm gamma\r\n", "VALUE "+strconv.Itoa(n+1), true},
-	}
-	//ClientSpawner(t, testCases, n)
 }
 func TestCase2(t *testing.T) {
 		var testCases = []TestCase {
@@ -128,8 +121,8 @@ func TestCase2(t *testing.T) {
 			return
 		}
 		
-		var n =5
-		fmt.Println("Number of logs ",40)
+		var n =10
+		//fmt.Println("Number of logs ",40)
 		defer conn.Close()
 		// Execute the testcases
 		for j:=0;j<n;j++{

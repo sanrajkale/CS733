@@ -2,7 +2,7 @@ package main
 
 import (
 	"raft"
-	"fmt"
+	//"fmt"
 	"log"
 	"time"
 	"strings"
@@ -223,7 +223,7 @@ func sendVoteRequestRpc send the vote request from Candiate to other servers
 func (r *Raft) sendVoteRequestRpc(value ServerConfig, VoteCount chan int) error {
 
 	client, err := rpc.Dial("tcp", "localhost:"+strconv.Itoa(value.LogPort))
-	fmt.Println("Dialing vote request rpc from:",r.Id," to:",value.Id)
+	log.Println("Dialing vote request rpc from:",r.Id," to:",value.Id)
 
 	 if err != nil {
 		log.Print("Error Dialing sendVoteRequestRpc:", err)
@@ -539,7 +539,7 @@ func  AppendCaller() {
 				}
 			}*/
 
-			fmt.Println("Append Recieved ",logentry.SequenceNumber)
+			//fmt.Println("Append Recieved ",logentry.SequenceNumber)
 				var AppendAck_ch = make (chan int,len(r.ClusterConfigV.Servers)-1)
 				for _,server := range r.ClusterConfigV.Servers {			
 						if server.Id != r.Id {
@@ -607,7 +607,7 @@ func  AppendCaller() {
 								SyncAllLog(Log_Conn{logentry,conn})		
 
 						}
-					if syncNeeded==true{  // If Log is not commited, call thsi function to Sync all logs, Logs are sync only till current Logentry, not beyong this even if 
+					if syncNeeded==true{  // If Log is is commited, call thsi function to Sync all logs, Logs are sync only till current Logentry, not beyong this even if 
 									// Leader log has go more entries added while executing this
 									//fmt.Println("Sync call from append")
 						//	fmt.Println("Sync Called from syncNeeded == True")
@@ -707,7 +707,7 @@ func CommitCaller(){
 */
 
 func SyncAllLog(log_conn Log_Conn ){
-	fmt.Println("Sync Called")
+	//fmt.Println("Sync Called")
 	for r.IsLeader==1{
 		logentry:=log_conn.Logentry
 		conn:=log_conn.Conn
@@ -791,7 +791,7 @@ func SyncAllLog(log_conn Log_Conn ){
 					break
 				}		
 	}//outer for loop
-	fmt.Println("Sync Exited")
+	//fmt.Println("Sync Exited")
 }
 
 
@@ -953,7 +953,7 @@ func (r *Raft) ClientListener(listener net.Conn) {
 					logMutex.Lock()			
 						var logentry=LogEntry{r.CurrentTerm,len(r.Log),commandbytes,false}
 						r.Log=append(r.Log,logentry)
-						fmt.Println("Sendeing log ",logentry.SequenceNumber)
+						log.Println("Appennding log ",logentry.SequenceNumber)
 						Append_ch <- Log_Conn{logentry, listener}
 					logMutex.Unlock()
 				//}
@@ -1048,7 +1048,7 @@ func (r *Raft) AcceptRPC(port int) {
 // Register this function
 	
 	rpc.Register(rpcCal)
-	fmt.Println("IN Accept RPC call")
+	//fmt.Println("IN Accept RPC call")
 
 	listener, e := net.Listen("tcp", "localhost:"+strconv.Itoa(port))
 	
@@ -1091,7 +1091,7 @@ func ConnectToServers(i int,Servers []ServerConfig) {
 	for {
 		client, err = rpc.Dial("tcp", "localhost:" + strconv.Itoa(9001+2*i))
 		if err == nil {
-			log.Print("Connected to ", strconv.Itoa(9001+2*i))
+			//log.Print("Connected to ", strconv.Itoa(9001+2*i))
 			break
 			}
 	}				
